@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InnovaTECH - System Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght=400;600;700;800&display=swap');
+        body { font-family: 'Inter', sans-serif; -webkit-user-select: none; user-select: none; }
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .img-preview { width: 50px; height: 50px; object-fit: cover; border-radius: 8px; background: #f1f5f9; }
+        .pestaña.hidden { display: none; }
+        .modal-active { display: flex !important; }
+        #loginOverlay { backdrop-filter: blur(10px); }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .notif-anim { animation: slideIn 0.3s ease-out; }
+        .dev-glow { box-shadow: 0 0 15px rgba(59, 130, 246, 0.5); }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-900">
+
+    <div id="notifContainer" class="fixed top-24 right-4 z-[200] space-y-2"></div>
+
+    <div id="loginOverlay" class="fixed inset-0 bg-slate-900/90 z-[200] flex items-center justify-center p-4">
+        <div class="bg-white p-8 rounded-3xl shadow-2xl max-w-sm w-full text-center border-t-4 border-blue-600">
+            <div class="bg-blue-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-500/50">
+                <span class="text-white font-black text-2xl italic">I</span>
+            </div>
+            <h2 class="text-2xl font-black uppercase italic mb-2 text-slate-800">Innova<span class="text-blue-600">TECH</span></h2>
+            <p class="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-6">Control de Acceso</p>
+            <input type="password" id="passInput" placeholder="Clave de acceso" class="w-full p-4 bg-slate-100 rounded-2xl mb-4 text-center font-bold text-xl outline-none border-2 border-transparent focus:border-blue-500 transition-all">
+            <button onclick="verificarAcceso()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-blue-700 transition shadow-lg">Iniciar Sesión</button>
+        </div>
+    </div>
+
+    <nav class="bg-slate-900 text-white p-4 shadow-xl sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-2">
+                <div class="bg-blue-600 p-2 rounded-lg"><span class="font-black text-xl italic px-1">I</span></div>
+                <h1 class="text-xl font-extrabold tracking-tight uppercase">Innova<span class="text-blue-500 italic">TECH</span></h1>
+                <span id="badgePerfil" class="ml-2 text-[8px] px-2 py-1 rounded-full font-bold uppercase border"></span>
+            </div>
+            <div class="flex items-center gap-2 md:gap-4 overflow-x-auto w-full md:w-auto pb-2 md:pb-0">
+                <div class="bg-slate-800 px-4 py-2 rounded-full flex items-center gap-3 border border-slate-700 shrink-0">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase leading-none">Tasa BCV</span>
+                    <div class="flex items-center font-black text-blue-400 italic">
+                        <span class="mr-1 text-xs">Bs.</span>
+                        <input type="number" id="tasaDia" oninput="ajustarAnchoTasa(this)" onchange="actualizarTasa()" class="bg-transparent min-w-[50px] outline-none text-center text-sm text-white" step="0.01">
+                    </div>
+                </div>
+                <div class="flex gap-1 shrink-0">
+                    <button onclick="cambiarPestaña('p-busqueda')" class="px-3 py-2 text-[9px] font-bold uppercase rounded-lg hover:bg-slate-800">📱 Vender</button>
+                    <button id="btn-stock" onclick="cambiarPestaña('p-inventario')" class="px-3 py-2 text-[9px] font-bold uppercase rounded-lg hover:bg-slate-800 jefe-only hidden">📦 Stock</button>
+                    <button id="btn-historial" onclick="cambiarPestaña('p-historial')" class="px-3 py-2 text-[9px] font-bold uppercase rounded-lg hover:bg-slate-800">📊 Historial</button>
+                    <button id="btn-dev" onclick="cambiarPestaña('p-dev')" class="px-3 py-2 text-[9px] font-bold uppercase rounded-lg bg-blue-600/20 text-blue-400 dev-only hidden">🛠 System</button>
+                    <button onclick="forzarSincronizacionManual()" class="px-3 py-2 text-[9px] font-bold uppercase rounded-lg bg-emerald-600/20 text-emerald-400 ml-2">🔄 Recargar</button>
+                    <button onclick="location.reload()" class="px-3 py-2 text-[9px] font-bold uppercase rounded-lg bg-red-500/20 text-red-400 ml-1">Salir</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto p-4 lg:p-6 space-y-6">
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-white p-4 rounded-2xl border shadow-sm flex items-center gap-4">
+                <div class="bg-green-100 p-3 rounded-xl text-green-600 font-black text-xs">Bs.</div>
+                <div><p class="text-[10px] font-bold text-slate-400 uppercase">Caja Bruta Hoy</p><p id="dashVenta" class="text-xl font-black">0.00 $</p></div>
+            </div>
+            <div class="bg-white p-4 rounded-2xl border shadow-sm flex items-center gap-4 jefe-only hidden">
+                <div class="bg-purple-100 p-3 rounded-xl text-purple-600 font-black text-xs">NET</div>
+                <div><p class="text-[10px] font-bold text-slate-400 uppercase">Utilidad Hoy</p><p id="dashGanancia" class="text-xl font-black">0.00 $</p></div>
+            </div>
+            <div class="bg-white p-4 rounded-2xl border shadow-sm flex items-center gap-4 jefe-only hidden">
+                <div class="bg-blue-100 p-3 rounded-xl text-blue-600 font-black text-xs">INV</div>
+                <div><p class="text-[10px] font-bold text-slate-400 uppercase">Modelos</p><p id="dashTotalItems" class="text-xl font-black">0</p></div>
+            </div>
+            <div class="bg-white p-4 rounded-2xl border shadow-sm flex items-center gap-4 jefe-only hidden">
+                <div class="bg-amber-100 p-3 rounded-xl text-amber-600 font-black text-xs">STK</div>
+                <div><p class="text-[10px] font-bold text-slate-400 uppercase">Agotándose</p><p id="dashAlerta" class="text-xl font-black">0</p></div>
+            </div>
+        </div>
+
+        <section id="p-busqueda" class="pestaña grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div class="lg:col-span-7 xl:col-span-8 space-y-4">
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+                    <div class="flex flex-col md:flex-row gap-2 mb-4">
+                        <input type="text" id="inputBusqueda" onkeyup="buscarPieza()" placeholder="Buscar por modelo o código..." class="w-full px-5 py-3 bg-slate-50 border rounded-2xl focus:ring-4 focus:ring-blue-500/10 outline-none text-lg font-medium">
+                        <div class="flex gap-1">
+                            <button onclick="filtrarStockBusqueda('TODOS')" class="px-3 py-2 text-[9px] font-bold uppercase bg-slate-100 rounded-xl hover:bg-slate-200">Todos</button>
+                            <button onclick="filtrarStockBusqueda('BAJO')" class="px-3 py-2 text-[9px] font-bold uppercase bg-amber-100 text-amber-700 rounded-xl hover:bg-amber-200">Bajo Stock</button>
+                            <button onclick="filtrarStockBusqueda('AGOTADO')" class="px-3 py-2 text-[9px] font-bold uppercase bg-red-100 text-red-700 rounded-xl hover:bg-red-200">Agotados</button>
+                        </div>
+                    </div>
+                    <div id="resultadosBusqueda" class="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto custom-scroll pr-2"></div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-5 xl:col-span-4">
+                <div class="bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden sticky top-24">
+                    <div class="bg-slate-900 p-5 text-white flex justify-between items-center italic">
+                        <h2 class="font-black text-[10px] uppercase tracking-widest">Carrito de Venta</h2>
+                        <button onclick="limpiarCarritoTotal()" class="text-[9px] bg-red-500 px-3 py-1 rounded-full font-bold">VACIAR</button>
+                    </div>
+                    <div class="p-4 bg-slate-50 border-b space-y-2">
+                        <input type="text" id="clienteNombre" placeholder="Nombre Cliente" class="w-full p-3 text-xs rounded-lg border outline-none uppercase font-bold">
+                        <div class="flex items-center gap-2">
+                            <label class="text-[9px] font-black uppercase text-slate-400 shrink-0">Método:</label>
+                            <select id="metodoPago" onchange="alternarCampoReferencia()" class="w-full p-2 text-xs bg-white rounded border font-bold text-slate-700 outline-none">
+                                <option value="EFECTIVO $">EFECTIVO $</option>
+                                <option value="EFECTIVO BS">EFECTIVO BS</option>
+                                <option value="PAGO MOVIL">PAGO MÓVIL</option>
+                                <option value="ZELLE">ZELLE</option>
+                                <option value="TRANSFERENCIA">TRANSFERENCIA</option>
+                            </select>
+                        </div>
+                        <div id="contenedorReferencia" class="flex items-center gap-2 hidden">
+                            <label class="text-[9px] font-black uppercase text-slate-400 shrink-0">Ref #:</label>
+                            <input type="text" id="metodoReferencia" placeholder="NÚMERO DE REFERENCIA" class="w-full p-2 text-xs rounded border outline-none uppercase font-bold bg-white text-slate-700">
+                        </div>
+                    </div>
+                    <div id="listaCarrito" class="p-4 space-y-3 min-h-[100px] max-h-[200px] overflow-y-auto custom-scroll"></div>
+                    <div class="p-6 border-t bg-white space-y-4">
+                        <div class="flex justify-between items-center">
+                            <span class="text-blue-600 font-black text-[10px] italic uppercase">Total a pagar:</span>
+                            <div class="text-right">
+                                <p class="text-3xl font-black text-slate-900 italic"><span id="totalBS">0.00</span> <small class="text-[10px] text-slate-400 font-normal">Bs.</small></p>
+                                <p class="text-sm font-bold text-slate-400" id="totalUSD_cart">0.00 $</p>
+                            </div>
+                        </div>
+                        <button onclick="procesarVenta()" class="w-full bg-blue-600 text-white py-5 rounded-2xl font-black shadow-lg uppercase text-[10px] tracking-widest">Confirmar Venta</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="p-inventario" class="pestaña hidden jefe-only">
+            <div class="bg-white p-6 rounded-2xl border shadow-sm">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="font-black uppercase italic text-blue-600">Control de Inventario</h2>
+                    <button onclick="exportarExcelCSV()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase px-4 py-2 rounded-xl transition shadow">📊 Exportar Excel (CSV)</button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 bg-slate-900 p-6 rounded-2xl mb-8">
+                    <div>
+                        <label class="text-[9px] text-slate-500 font-black uppercase ml-1">Foto</label>
+                        <input type="file" id="invFoto" accept="image/*" capture="environment" class="w-full text-[10px] text-slate-400 mt-1">
+                    </div>
+                    <div>
+                        <label class="text-[9px] text-slate-500 font-black uppercase ml-1">Referencia</label>
+                        <input type="text" id="invCodigo" placeholder="CÓDIGO" class="w-full p-3 rounded-xl text-xs uppercase bg-slate-800 text-white mt-1">
+                    </div>
+                    <div>
+                        <label class="text-[9px] text-slate-500 font-black uppercase ml-1">Nombre</label>
+                        <input type="text" id="invNombre" placeholder="NOMBRE" class="w-full p-3 rounded-xl text-xs uppercase bg-slate-800 text-white mt-1">
+                    </div>
+                    <div>
+                        <label class="text-[9px] text-slate-500 font-black uppercase ml-1">Color</label>
+                        <input type="text" id="invColor" placeholder="COLOR" class="w-full p-3 rounded-xl text-xs uppercase bg-slate-800 text-white mt-1">
+                    </div>
+                    <div>
+                        <label class="text-[9px] text-slate-500 font-black uppercase ml-1">Cantidad</label>
+                        <input type="number" id="invStock" placeholder="0" class="w-full p-3 rounded-xl text-xs bg-slate-800 text-white mt-1">
+                    </div>
+                    <div>
+                        <label class="text-[9px] text-slate-500 font-black uppercase ml-1">Costo $ (Privado)</label>
+                        <input type="number" id="invCosto" step="0.01" placeholder="0.00" class="w-full p-3 rounded-xl text-xs bg-slate-800 text-white mt-1">
+                    </div>
+                    <div>
+                        <label class="text-[9px] text-slate-500 font-black uppercase ml-1">Precio Venta $</label>
+                        <input type="number" id="invPrecio" step="0.01" placeholder="0.00" class="w-full p-3 rounded-xl text-xs bg-slate-800 text-white mt-1">
+                    </div>
+                    <button onclick="agregarAlInventario()" class="bg-blue-600 text-white rounded-xl font-black text-xs uppercase py-3 mt-auto h-[48px]">Añadir al Sistema</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-[11px]">
+                        <thead class="text-slate-400 uppercase font-black border-b">
+                            <tr><th class="p-4">Imagen</th><th class="p-4">Producto / Ref</th><th class="p-4 text-center">Stock</th><th class="p-4">Costo ($)</th><th class="p-4">Venta ($)</th><th class="p-4 text-right">Acciones</th></tr>
+                        </thead>
+                        <tbody id="tablaInventario" class="divide-y"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section id="p-historial" class="pestaña hidden">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border space-y-6">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-4">
+                    <h2 class="text-xl font-black text-slate-800 italic uppercase mb-2 md:mb-0">Historial de Ventas</h2>
+                    <div id="cierreCajaContenedor" class="bg-slate-900 text-white p-4 rounded-xl text-[10px] space-y-1 w-full md:w-auto font-mono">
+                        <p class="text-blue-400 font-bold uppercase border-b border-slate-700 pb-1">📊 CIERRE DE CAJA HOY</p>
+                        <p>Total USD: <span id="cierreTotalUSD" class="text-green-400 font-black">0.00 $</span></p>
+                        <p>Total Bs. Equiv: <span id="cierreTotalBS" class="text-blue-400 font-black">0.00 Bs</span></p>
+                        <div id="cierreMetodosDesglose" class="pt-1 text-slate-400 grid grid-cols-2 gap-x-4"></div>
+                    </div>
+                </div>
+                <div id="tablaHistorial" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+            </div>
+        </section>
+
+        <section id="p-dev" class="pestaña hidden dev-only">
+            <div class="bg-slate-900 p-8 rounded-3xl border border-blue-500 shadow-2xl dev-glow">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
+                    <div>
+                        <h2 class="text-2xl font-black text-blue-400 italic uppercase">System Console</h2>
+                        <p class="text-slate-400 text-xs uppercase font-bold tracking-widest">Nivel de Acceso: Desarrollador Maestro</p>
+                    </div>
+                    <div class="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+                        <button onclick="exportarExcelCSV()" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all transform hover:scale-105 shadow-lg shadow-purple-500/20 text-center">
+                            📦 Respaldo de Inventario (Excel/CSV)
+                        </button>
+                        <button onclick="respaldoMaestro()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all transform hover:scale-105 shadow-lg shadow-blue-500/20 text-center">
+                            💾 Descargar Respaldo Total (JSON)
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-slate-800 rounded-2xl p-6 border border-slate-700">
+                        <h3 class="text-blue-400 font-black text-[10px] uppercase mb-4 tracking-tighter">Depuración de Datos (Raw Data)</h3>
+                        <div id="rawViewer" class="bg-black/50 p-4 rounded-xl font-mono text-[10px] text-green-400 h-[300px] overflow-y-auto custom-scroll">
+                            Cargando datos del system...
+                        </div>
+                    </div>
+                    <div class="bg-slate-800 rounded-2xl p-6 border border-slate-700 flex flex-col justify-between">
+                        <div>
+                            <h3 class="text-blue-400 font-black text-[10px] uppercase mb-4 tracking-tighter">Estadísticas de Memoria</h3>
+                            <div class="space-y-4">
+                                <div class="flex justify-between border-b border-slate-700 pb-2">
+                                    <span class="text-slate-400 text-[10px] font-bold uppercase italic">Sincronización Nube</span>
+                                    <span id="memUsage" class="text-white font-black text-xs">ACTIVO</span>
+                                </div>
+                                <div class="flex justify-between border-b border-slate-700 pb-2">
+                                    <span class="text-slate-400 text-[10px] font-bold uppercase italic">Peso estimado</span>
+                                    <span id="imgWeight" class="text-white font-black text-xs">0 KB</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-6 p-4 bg-slate-900/50 rounded-xl border border-slate-700">
+                            <p class="text-blue-400 text-[10px] font-black uppercase tracking-wider mb-1">💡 NOTA DE SEGURIDAD</p>
+                            <p class="text-slate-400 text-[10px] leading-relaxed">La base de datos se almacena y sincroniza de forma segura en tiempo real en la nube. Utiliza los respaldos externos de manera frecuente.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <div id="modalEdit" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] hidden items-center justify-center p-4">
+        <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden p-6 max-h-[90vh] overflow-y-auto custom-scroll">
+            <h3 class="font-black italic uppercase text-xs mb-4 text-blue-600">Modificar Producto</h3>
+            <div class="space-y-4">
+                <input type="hidden" id="editIndex">
+                <div class="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border">
+                    <img id="editFotoPreview" class="w-16 h-16 rounded-xl object-cover bg-white border">
+                    <input type="file" id="editFotoInput" accept="image/*" class="text-[10px] flex-1">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <input type="text" id="editCodigo" class="p-3 bg-slate-100 rounded-xl font-bold uppercase text-xs" placeholder="CÓDIGO">
+                    <input type="text" id="editColor" class="p-3 bg-slate-100 rounded-xl font-bold uppercase text-xs" placeholder="COLOR">
+                </div>
+                <input type="text" id="editNombre" class="w-full p-3 bg-slate-100 rounded-xl font-bold uppercase text-xs" placeholder="NOMBRE">
+                <div class="grid grid-cols-3 gap-2">
+                    <input type="number" id="editStock" class="p-3 bg-slate-100 rounded-xl font-black text-xs" placeholder="STOCK">
+                    <input type="number" id="editCosto" step="0.01" class="p-3 bg-slate-100 rounded-xl font-black text-purple-600 text-xs" placeholder="COSTO $">
+                    <input type="number" id="editPrecio" step="0.01" class="p-3 bg-slate-100 rounded-xl font-black text-blue-600 text-xs" placeholder="PRECIO $">
+                </div>
+                <button onclick="guardarEdicion()" class="w-full bg-blue-600 text-white py-4 rounded-xl font-black uppercase text-[10px] shadow-lg">Guardar Cambios</button>
+                <button onclick="cerrarModal()" class="w-full text-slate-400 font-bold uppercase text-[10px]">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalEditVenta" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] hidden items-center justify-center p-4">
+        <div class="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden p-6">
+            <h3 class="font-black italic uppercase text-xs mb-4 text-blue-600">Editar Registro</h3>
+            <div class="space-y-4">
+                <input type="hidden" id="editVentaIndex">
+                <input type="text" id="editVentaCliente" class="w-full p-3 bg-slate-100 rounded-xl font-bold uppercase text-xs">
+                <input type="number" id="editVentaMonto" step="0.01" class="w-full p-3 bg-slate-100 rounded-xl font-black text-blue-600">
+                <div class="flex items-center gap-2">
+                    <label class="text-[10px] font-black uppercase text-slate-400">Método:</label>
+                    <select id="editVentaMetodo" class="w-full p-3 bg-slate-100 rounded-xl text-xs font-bold uppercase">
+                        <option value="EFECTIVO $">EFECTIVO $</option>
+                        <option value="EFECTIVO BS">EFECTIVO BS</option>
+                        <option value="PAGO MOVIL">PAGO MÓVIL</option>
+                        <option value="ZELLE">ZELLE</option>
+                        <option value="TRANSFERENCIA">TRANSFERENCIA</option>
+                    </select>
+                </div>
+                <button onclick="guardarEdicionVenta()" class="w-full bg-blue-600 text-white py-4 rounded-xl font-black uppercase text-[11px]">Actualizar</button>
+                <button onclick="cerrarModalVenta()" class="w-full text-slate-400 font-bold uppercase text-[10px]">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalRecibo" class="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[150] hidden items-center justify-center p-4">
+        <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-6 text-center">
+            <div class="bg-green-100 text-green-600 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
+                <span class="text-xl font-bold">✓</span>
+            </div>
+            <h3 class="font-black italic uppercase text-sm text-slate-800 mb-2">¡Venta Procesada!</h3>
+            <p class="text-slate-400 text-[10px] uppercase font-bold mb-4">Nota lista para enviar</p>
+            <textarea id="textoReciboRaw" class="w-full h-40 p-3 bg-slate-50 font-mono text-[10px] text-slate-700 border rounded-xl outline-none resize-none mb-4" readonly></textarea>
+            <div class="space-y-2">
+                <button onclick="copiarReciboAlPortapapeles()" class="w-full bg-blue-600 text-white py-3 rounded-xl font-black uppercase text-[10px] tracking-wider shadow shadow-blue-500/40">📋 Copiar Recibo</button>
+                <button onclick="enviarWhatsAppDirecto()" class="w-full bg-emerald-600 text-white py-3 rounded-xl font-black uppercase text-[10px] tracking-wider shadow shadow-emerald-500/40">💬 Enviar a WhatsApp</button>
+                <button onclick="cerrarModalRecibo()" class="w-full text-slate-500 font-bold uppercase text-[9px] py-1">Cerrar Ventana</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // SEGURIDAD: Bloqueos de Programador
+        document.onkeydown = function(e) { if(e.keyCode == 123) return false; if(e.ctrlKey && e.shiftKey && e.keyCode == 'I'.charCodeAt(0)) return false; }
+        document.addEventListener('contextmenu', event => event.preventDefault());
+
+        // PERFILES
+        const _k1 = "MTI1ODk2Mw=="; // Jefe: 1258963
+        const _k2 = "MjAyNg==";     // Empleada: 2026
+        const _k3 = "MTI1ODc0";     // Programador: 125874
+
+        let perfilActual = "";
+        let inventario = [];
+        let ventas = [];
+        let tasa = 40;
+        let carrito = [];
+        let filtroBusquedaActual = "TODOS";
+
+        // =================================================================================
+        // CONFIGURACIÓN DE FIREBASE EN TIEMPO REAL CON TU NUEVA URL
+        // =================================================================================
+        const firebaseConfig = {
+            databaseURL: "https://innovatech-bfa82-c4bbb-default-rtdb.firebaseio.com/"
+        };
+        
+        // Inicializar Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        const inputTasa = document.getElementById('tasaDia');
+
+        function ajustarAnchoTasa(el) { el.style.width = ((el.value.length + 1) * 9) + "px"; }
+
+        // Escuchar cambios en la base de datos central en tiempo real
+        db.ref().on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                inventario = data.inventario || [];
+                ventas = data.ventas || [];
+                tasa = data.tasa || 40;
+                
+                inputTasa.value = tasa;
+                ajustarAnchoTasa(inputTasa);
+                actualizarDashboard();
+                renderInventario();
+                renderHistorial();
+                actualizarConsolaDev();
+                buscarPieza(); // Sincroniza las búsquedas en tiempo real ante cambios externos
+                if(carrito.length) renderCarrito();
+            }
+        });
+
+        // Botón de sincronización manual solicitado (No desloguea, solo fuerza el fetch)
+        function forzarSincronizacionManual() {
+            db.ref().once('value').then((snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    inventario = data.inventario || [];
+                    ventas = data.ventas || [];
+                    tasa = data.tasa || 40;
+                    
+                    inputTasa.value = tasa;
+                    ajustarAnchoTasa(inputTasa);
+                    actualizarDashboard();
+                    renderInventario();
+                    renderHistorial();
+                    actualizarConsolaDev();
+                    buscarPieza();
+                    if(carrito.length) renderCarrito();
+                    enviarNotificacion("🔄 Datos sincronizados con éxito");
+                }
+            }).catch(err => {
+                enviarNotificacion("❌ Error de sincronización");
+            });
+        }
+
+        function escribirNube() {
+            db.ref().set({
+                inventario: inventario,
+                ventas: ventas,
+                tasa: tasa
+            });
+        }
+        // =================================================================================
+
+        function verificarAcceso() {
+            const raw = document.getElementById('passInput').value;
+            const pass = btoa(raw);
+            const overlay = document.getElementById('loginOverlay');
+            
+            if(raw === "125874") { perfilActual = "DEV"; activarPerfilDev(); overlay.style.display = 'none'; }
+            else if(pass === _k1) { perfilActual = "JEFE"; activarPerfilJefe(); overlay.style.display = 'none'; }
+            else if(pass === _k2) { perfilActual = "EMPLEADA"; activarPerfilEmpleado(); overlay.style.display = 'none'; }
+            else { alert("❌ Clave incorrecta"); }
+        }
+
+        function activarPerfilDev() {
+            document.querySelectorAll('.jefe-only, .dev-only').forEach(el => el.classList.remove('hidden'));
+            const b = document.getElementById('badgePerfil');
+            b.innerText = "DEV MODO";
+            b.className = "ml-2 text-[8px] bg-blue-500/20 text-blue-400 px-2 py-1 rounded-full font-bold border-blue-500/20 dev-glow";
+            actualizarConsolaDev();
+        }
+
+        function activarPerfilJefe() {
+            document.querySelectorAll('.jefe-only').forEach(el => el.classList.remove('hidden'));
+            document.querySelectorAll('.dev-only').forEach(el => el.classList.add('hidden'));
+            const b = document.getElementById('badgePerfil');
+            b.innerText = "MODO: JEFE";
+            b.className = "ml-2 text-[8px] bg-blue-500/20 text-blue-400 px-2 py-1 rounded-full font-bold border-blue-500/20";
+            actualizarConsolaDev();
+        }
+
+        function activarPerfilEmpleado() {
+            document.querySelectorAll('.jefe-only, .dev-only').forEach(el => el.classList.add('hidden'));
+            const b = document.getElementById('badgePerfil');
+            b.innerText = "MODO: VENTAS";
+            b.className = "ml-2 text-[8px] bg-green-500/20 text-green-400 px-2 py-1 rounded-full font-bold border-green-500/20";
+            actualizarConsolaDev();
+        }
+
+        function redimensionarImagen(file, maxAncho = 150) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    const img = new Image();
+                    img.onload = function () {
+                        const canvas = document.createElement('canvas');
+                        const escala = maxAncho / img.width;
+                        canvas.width = maxAncho;
+                        canvas.height = img.height * escala;
+                        
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        resolve(canvas.toDataURL('image/jpeg', 0.7));
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function agregarAlInventario() {
+            const cod = document.getElementById('invCodigo').value.trim().toUpperCase();
+            const nom = document.getElementById('invNombre').value.trim().toUpperCase();
+            const col = document.getElementById('invColor').value.trim().toUpperCase() || 'ÚNICO';
+            const stk = parseInt(document.getElementById('invStock').value);
+            const cos = parseFloat(document.getElementById('invCosto').value) || 0;
+            const pre = parseFloat(document.getElementById('invPrecio').value);
+            const fotoFile = document.getElementById('invFoto').files[0];
+
+            if(!cod || !nom || isNaN(stk) || isNaN(pre)) return alert("⚠️ Datos incompletos");
+
+            let fotoBase64 = "";
+            if(fotoFile) {
+                fotoBase64 = await redimensionarImagen(fotoFile);
+            }
+
+            inventario.push({ codigo: cod, nombre: nom, color: col, stock: stk, costo: cos, precio: pre, foto: fotoBase64 });
+            escribirNube();
+            ["invCodigo", "invNombre", "invColor", "invStock", "invCosto", "invPrecio", "invFoto"].forEach(id => document.getElementById(id).value = '');
+        }
+
+        function filtrarStockBusqueda(filtro) {
+            filtroBusquedaActual = filtro;
+            buscarPieza();
+        }
+
+        function buscarPieza() {
+            const q = document.getElementById('inputBusqueda').value.toUpperCase();
+            const res = document.getElementById('resultadosBusqueda');
+            
+            if(!q && filtroBusquedaActual === "TODOS") {
+                res.innerHTML = '';
+                return;
+            }
+
+            res.innerHTML = ''; 
+            let filtrados = inventario;
+            if(filtroBusquedaActual === "BAJO") {
+                filtrados = inventario.filter(p => p && p.stock > 0 && p.stock < 3);
+            } else if(filtroBusquedaActual === "AGOTADO") {
+                filtrados = inventario.filter(p => p && p.stock <= 0);
+            }
+
+            filtrados.filter(p => p && (p.codigo.includes(q) || p.nombre.includes(q))).forEach(p => {
+                res.innerHTML += `
+                    <div onclick="agregarAlCarrito('${p.codigo}', '${p.color}')" class="p-3 bg-white border-2 border-slate-100 rounded-2xl flex gap-4 items-center hover:border-blue-500 cursor-pointer">
+                        <img src="${p.foto || 'https://via.placeholder.com/50'}" class="w-10 h-10 rounded-lg object-cover">
+                        <div class="flex-1">
+                            <h3 class="font-black text-[10px] uppercase leading-tight">${p.nombre}</h3>
+                            <p class="text-[8px] font-bold text-slate-400 uppercase">${p.color} - ${p.codigo}</p>
+                            <p class="text-xs font-black text-blue-600">${p.precio.toFixed(2)} $</p>
+                        </div>
+                        <div class="text-right"><p class="text-[8px] font-bold text-slate-400">STOCK</p><p class="text-xs font-black ${p.stock < 3 ? 'text-red-500': 'text-slate-800'}">${p.stock}</p></div>
+                    </div>`;
+            });
+        }
+
+        function agregarAlCarrito(codigo, color) {
+            const p = inventario.find(i => i && i.codigo === codigo && i.color === color);
+            if(!p || p.stock <= 0) return alert("❌ Sin Stock disponible");
+            
+            const item = carrito.find(c => c.codigo === codigo && c.color === color);
+            if(item) { 
+                if(item.cantidad < p.stock) item.cantidad++; 
+                else alert("Límite de Stock alcanzado"); 
+            }
+            else carrito.push({...p, cantidad: 1});
+            renderCarrito();
+        }
+
+        function renderCarrito() {
+            const container = document.getElementById('listaCarrito'); container.innerHTML = '';
+            let sum = 0;
+            carrito.forEach((item, i) => {
+                sum += item.precio * item.cantidad;
+                container.innerHTML += `
+                    <div class="flex justify-between items-center bg-white p-2 rounded-xl border">
+                        <div class="flex items-center gap-2">
+                            <img src="${item.foto || 'https://via.placeholder.com/40'}" class="w-8 h-8 rounded object-cover">
+                            <div><p class="text-[9px] font-black uppercase leading-tight">${item.nombre}</p><p class="text-[7px] text-slate-400 uppercase">${item.color} - ${item.precio.toFixed(2)}$</p></div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="cambiarCant(${i},-1)" class="w-5 h-5 bg-slate-100 rounded font-bold text-xs">-</button>
+                            <span class="text-[10px] font-black">${item.cantidad}</span>
+                            <button onclick="cambiarCant(${i},1)" class="w-5 h-5 bg-slate-100 rounded font-bold text-xs">+</button>
+                        </div>
+                    </div>`;
+            });
+            document.getElementById('totalUSD_cart').innerText = sum.toFixed(2) + " $";
+            document.getElementById('totalBS').innerText = (sum * tasa).toLocaleString('de-DE', {minimumFractionDigits: 2});
+        }
+
+        function cambiarCant(i, delta) {
+            const item = carrito[i];
+            const p = inventario.find(inv => inv && inv.codigo === item.codigo && inv.color === item.color);
+            if (delta > 0 && item.cantidad < p.stock) item.cantidad++;
+            else if (delta < 0 && item.cantidad > 1) item.cantidad--;
+            else if (delta < 0 && item.cantidad === 1) carrito.splice(i, 1);
+            renderCarrito();
+        }
+
+        function alternarCampoReferencia() {
+            const metodo = document.getElementById('metodoPago').value;
+            const contenedor = document.getElementById('contenedorReferencia');
+            const inputRef = document.getElementById('metodoReferencia');
+            
+            if (metodo === "EFECTIVO $" || metodo === "EFECTIVO BS") {
+                contenedor.classList.add('hidden');
+                inputRef.value = "";
+            } else {
+                contenedor.classList.remove('hidden');
+            }
+        }
+
+        function procesarVenta() {
+            if(!carrito.length) return;
+            const cli = document.getElementById('clienteNombre').value.trim().toUpperCase() || "CLIENTE GENERAL";
+            const metodo = document.getElementById('metodoPago').value;
+            const ref = document.getElementById('metodoReferencia').value.trim().toUpperCase();
+            let total = 0;
+            let costoTotalVenta = 0;
+            let itemsTexto = "";
+            let itemsParaTicket = [];
+
+            carrito.forEach(item => {
+                const pInv = inventario.find(i => i && i.codigo === item.codigo && i.color === item.color);
+                if(pInv) { 
+                    pInv.stock -= item.cantidad; 
+                    total += item.precio * item.cantidad; 
+                    costoTotalVenta += (pInv.costo || 0) * item.cantidad;
+                    itemsTexto += `${item.cantidad}x ${item.nombre} (${item.color})\n`;
+                    itemsParaTicket.push({
+                        nombre: item.nombre,
+                        color: item.color,
+                        cantidad: item.cantidad,
+                        precio: item.precio
+                    });
+                }
+            });
+
+            const nuevaVenta = { 
+                fecha: new Date().toLocaleString(), 
+                fechaISO: new Date().toLocaleDateString(), 
+                cliente: cli, 
+                totalUSD: total.toFixed(2), 
+                costoUSD: costoTotalVenta.toFixed(2),
+                metodo: metodo,
+                referencia: ref || null,
+                perfil: perfilActual,
+                productos: itemsParaTicket
+            };
+
+            ventas.unshift(nuevaVenta);
+            escribirNube();
+            
+            const totalBsFormated = (total * tasa).toLocaleString('de-DE', {minimumFractionDigits: 2});
+            let txtRef = ref ? `\n🔢 *Referencia:* ${ref}` : '';
+            const rawRecibo = `📦 *INNOVATECH - NOTA DE ENTREGA*\n👤 *Cliente:* ${cli}\n📅 *Fecha:* ${nuevaVenta.fecha}\n💳 *Método:* ${metodo}${txtRef}\n----------------------------\n${itemsTexto}----------------------------\n💵 *Total USD:* ${total.toFixed(2)} $\n🇻🇪 *Total Bs:* ${totalBsFormated} Bs.\n_(Tasa Ref: ${tasa.toFixed(2)} Bs.)_\n\n¡Gracias por su compra!`;
+            
+            document.getElementById('textoReciboRaw').value = rawRecibo;
+            document.getElementById('modalRecibo').classList.add('modal-active');
+
+            descargarTicketPDF(nuevaVenta);
+
+            carrito = []; 
+            renderCarrito();
+            document.getElementById('clienteNombre').value = '';
+            document.getElementById('metodoReferencia').value = '';
+            document.getElementById('metodoPago').value = 'EFECTIVO $';
+            document.getElementById('contenedorReferencia').classList.add('hidden');
+            buscarPieza();
+        }
+
+        function descargarTicketPDF(venta) {
+            const element = document.createElement('div');
+            element.className = "p-8 bg-white font-sans text-slate-800";
+            element.style.width = "400px";
+            
+            let filasProductos = '';
+            if (venta.productos && venta.productos.length > 0) {
+                venta.productos.forEach(prod => {
+                    filasProductos += `
+                        <tr class="border-b border-slate-100 text-xs text-slate-700">
+                            <td class="py-2 pr-2 font-bold">${prod.cantidad}x</td>
+                            <td class="py-2">${prod.nombre} <span class="text-[10px] text-slate-400 block">${prod.color}</span></td>
+                            <td class="py-2 text-right font-semibold">${prod.precio.toFixed(2)} $</td>
+                            <td class="py-2 text-right font-bold">${(prod.precio * prod.cantidad).toFixed(2)} $</td>
+                        </tr>`;
+                });
+            } else {
+                filasProductos = `
+                    <tr class="border-b border-slate-100 text-xs text-slate-700">
+                        <td class="py-2" colspan="4">Registro de venta empaquetado global</td>
+                    </tr>`;
+            }
+
+            const totalBsFormated = (parseFloat(venta.totalUSD) * tasa).toLocaleString('de-DE', {minimumFractionDigits: 2});
+            const refText = venta.referencia ? `<p style="margin:2px 0;"><strong>Referencia:</strong> ${venta.referencia}</p>` : '';
+
+            element.innerHTML = `
+                <div style="text-align: center; margin-bottom: 20px; border-bottom: 2px solid #3b82f6; padding-bottom: 15px;">
+                    <h2 style="font-size: 24px; font-weight: 800; text-transform: uppercase; margin: 0; font-style: italic; color: #0f172a;">INNOVA<span style="color:#2563eb;">TECH</span></h2>
+                    <p style="font-size: 9px; color: #94a3b8; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; margin: 2px 0 0 0;">Nota de Entrega Pro</p>
+                </div>
+                <div style="font-size: 11px; color: #475569; margin-bottom: 20px; line-height: 1.5;">
+                    <p style="margin:2px 0;"><strong>Cliente:</strong> ${venta.cliente}</p>
+                    <p style="margin:2px 0;"><strong>Fecha:</strong> ${venta.fecha}</p>
+                    <p style="margin:2px 0;"><strong>Método de Pago:</strong> ${venta.metodo}</p>
+                    ${refText}
+                </div>
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid #e2e8f0; font-size: 10px; text-transform: uppercase; text-align: left; color: #94a3b8;">
+                            <th style="padding-bottom: 6px; width: 15%;">Cant</th>
+                            <th style="padding-bottom: 6px; width: 45%;">Producto</th>
+                            <th style="padding-bottom: 6px; text-align: right; width: 20%;">Precio</th>
+                            <th style="padding-bottom: 6px; text-align: right; width: 20%;">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${filasProductos}
+                    </tbody>
+                </table>
+                <div style="border-top: 2px dashed #e2e8f0; padding-top: 15px; text-align: right;">
+                    <p style="margin: 0; font-size: 11px; color: #64748b; font-weight: bold;">TOTAL USD</p>
+                    <p style="margin: 0 0 4px 0; font-size: 24px; font-weight: 900; color: #0f172a;">${parseFloat(venta.totalUSD).toFixed(2)} $</p>
+                    <p style="margin: 0; font-size: 11px; color: #64748b; font-weight: bold;">TOTAL BS</p>
+                    <p style="margin: 0; font-size: 16px; font-weight: 800; color: #2563eb;">${totalBsFormated} Bs.</p>
+                    <p style="margin: 4px 0 0 0; font-size: 9px; color: #94a3b8; font-style: italic;">Ref. Tasa: ${tasa.toFixed(2)} Bs.</p>
+                </div>
+                <div style="text-align: center; margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 10px;">
+                    <p style="font-size: 10px; color: #94a3b8; font-weight: bold; margin: 0;">¡Gracias por su confianza y preferencia!</p>
+                </div>
+            `;
+
+            const opcionesConfig = {
+                margin: 10,
+                filename: `Ticket_${venta.cliente.replace(/\s+/g, '_')}_${Date.now()}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, logging: false },
+                jsPDF: { unit: 'mm', format: [120, 190], orientation: 'portrait' }
+            };
+
+            html2pdf().set(opcionesConfig).from(element).save().then(() => {
+                enviarNotificacion("📥 PDF Descargado Exitosamente");
+            });
+        }
+
+        function renderInventario() {
+            const t = document.getElementById('tablaInventario'); t.innerHTML = '';
+            inventario.forEach((p, i) => {
+                if(!p) return;
+                t.innerHTML += `
+                    <tr>
+                        <td class="p-4"><img src="${p.foto || 'https://via.placeholder.com/50'}" class="img-preview"></td>
+                        <td class="p-4">
+                            <p class="font-black text-blue-600 text-[9px] uppercase">${p.codigo}</p>
+                            <p class="font-bold uppercase text-xs text-slate-800">${p.nombre} (${p.color})</p>
+                        </td>
+                        <td class="p-4 text-center"><span class="px-2 py-1 rounded-full font-black ${p.stock < 3 ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'}">${p.stock}</span></td>
+                        <td class="p-4 font-bold text-xs text-purple-600">${(p.costo || 0).toFixed(2)} $</td>
+                        <td class="p-4 font-black text-xs text-slate-900">${p.precio.toFixed(2)} $</td>
+                        <td class="p-4 text-right">
+                            <button onclick="abrirEdicion(${i})" class="text-blue-500 font-bold text-[9px] mr-2">EDITAR</button>
+                            <button onclick="eliminarPieza(${i})" class="text-red-400 font-bold">✕</button>
+                        </td>
+                    </tr>`;
+            });
+        }
+
+        function renderHistorial() {
+            const container = document.getElementById('tablaHistorial'); container.innerHTML = '';
+            const canEdit = perfilActual === "JEFE" || perfilActual === "DEV";
+            ventas.forEach((v, i) => {
+                if(!v) return;
+                let badgeMetodo = v.metodo || 'EFECTIVO $';
+                if (v.referencia) {
+                    badgeMetodo += ` (REF: ${v.referencia})`;
+                }
+                container.innerHTML += `
+                    <div class="bg-slate-50 p-4 rounded-2xl border">
+                        <div class="flex justify-between items-start">
+                            <span class="text-[7px] font-black bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full uppercase">${badgeMetodo}</span>
+                            <div class="flex gap-2">
+                                <button onclick="descargarTicketPDF(ventas[${i}])" class="text-emerald-600 text-[9px] font-black uppercase mr-1">📄 PDF</button>
+                                ${canEdit ? `<button onclick="abrirEdicionVenta(${i})" class="text-blue-500 text-[9px] font-black uppercase">Edit</button><button onclick="eliminarVenta(${i})" class="text-red-500 text-[9px] font-black uppercase">Borrar</button>` : ''}
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <h4 class="font-black uppercase text-xs leading-none">${v.cliente}</h4>
+                            <p class="text-[8px] font-bold text-slate-400 uppercase mt-0.5">${v.fecha}</p>
+                        </div>
+                        <div class="flex justify-between items-end mt-3">
+                            <p class="text-lg font-black text-slate-900">${v.totalUSD} $</p>
+                            <p class="text-[9px] text-slate-400 font-bold font-mono">${(parseFloat(v.totalUSD)*tasa).toLocaleString('de-DE', {minimumFractionDigits: 1})} Bs.</p>
+                        </div>
+                    </div>`;
+            });
+        }
+
+        function exportarExcelCSV() {
+            if(!inventario.length) return alert("No hay datos para exportar");
+            let csvContent = "data:text/csv;charset=utf-8,";
+            csvContent += "Codigo,Producto,Color,Stock,Costo USD,Precio Venta USD\n";
+            inventario.forEach(p => {
+                if(p) csvContent += `"${p.codigo}","${p.nombre}","${p.color}",${p.stock},${p.costo || 0},${p.precio}\n`;
+            });
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `INVENTARIO_INNOVATECH_${new Date().toLocaleDateString()}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            enviarNotificacion("Inventario exportado como CSV");
+        }
+
+        function copiarReciboAlPortapapeles() {
+            const rawText = document.getElementById('textoReciboRaw');
+            rawText.select();
+            rawText.setSelectionRange(0, 99999);
+            navigator.clipboard.writeText(rawText.value);
+            enviarNotificacion("📋 Copiado al Portapapeles");
+        }
+
+        function enviarWhatsAppDirecto() {
+            const txt = document.getElementById('textoReciboRaw').value;
+            const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(txt)}`;
+            window.open(url, '_blank');
+        }
+
+        function respaldoMaestro() {
+            const backup = {
+                metadata: { version: "3.0.0-Pro", dev: "Master", fecha: new Date().toISOString() },
+                inventario: inventario,
+                ventas: ventas,
+                config: { tasa: tasa }
+            };
+            const blob = new Blob([JSON.stringify(backup, null, 2)], {type: "application/json"});
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `INNOVATECH_MASTER_BACKUP_${new Date().toLocaleDateString().replace(/\//g,'-')}.json`;
+            a.click();
+            enviarNotificacion("Respaldo Total Descargado");
+        }
+
+        function actualizarConsolaDev() {
+            if(perfilActual !== "DEV") return;
+            const raw = { inventario_size: inventario.length, ventas_size: ventas.length, tasa_act: tasa };
+            document.getElementById('rawViewer').innerText = JSON.stringify(raw, null, 4);
+            
+            const stringInv = JSON.stringify(inventario);
+            const sizeKB = (stringInv.length / 1024).toFixed(2);
+            document.getElementById('imgWeight').innerText = sizeKB + " KB";
+        }
+
+        function enviarNotificacion(msg) {
+            const container = document.getElementById('notifContainer');
+            const n = document.createElement('div');
+            n.className = "bg-slate-900 text-white border-l-4 border-blue-500 p-4 rounded-xl shadow-2xl notif-anim min-w-[220px]";
+            n.innerHTML = `<p class="text-[9px] font-bold text-slate-500 uppercase leading-none">Sistema</p><p class="text-xs font-black italic mt-1">${msg}</p>`;
+            container.appendChild(n);
+            setTimeout(() => { n.style.opacity = '0'; setTimeout(() => n.remove(), 500); }, 3000);
+        }
+
+        function actualizarDashboard() {
+            const hoy = new Date().toLocaleDateString();
+            const ventasHoy = ventas.filter(v => v && v.fechaISO === hoy);
+            
+            const totalHoy = ventasHoy.reduce((acc, v) => acc + parseFloat(v.totalUSD), 0);
+            const costoHoy = ventasHoy.reduce((acc, v) => acc + parseFloat(v.costoUSD || 0), 0);
+            const gananciaHoy = totalHoy - costoHoy;
+
+            document.getElementById('dashVenta').innerText = totalHoy.toFixed(2) + " $";
+            document.getElementById('dashGanancia').innerText = gananciaHoy.toFixed(2) + " $";
+            document.getElementById('dashTotalItems').innerText = inventario.filter(Boolean).length;
+            document.getElementById('dashAlerta').innerText = inventario.filter(p => p && p.stock < 3).length;
+
+            document.getElementById('cierreTotalUSD').innerText = totalHoy.toFixed(2) + " $";
+            document.getElementById('cierreTotalBS').innerText = (totalHoy * tasa).toLocaleString('de-DE', {minimumFractionDigits: 2}) + " Bs";
+            
+            const metodos = ["EFECTIVO $", "EFECTIVO BS", "PAGO MOVIL", "ZELLE", "TRANSFERENCIA"];
+            const desgloseContenedor = document.getElementById('cierreMetodosDesglose');
+            desgloseContenedor.innerHTML = "";
+            
+            metodos.forEach(m => {
+                const subtotal = ventasHoy.filter(v => v.metodo === m || (!v.metodo && m === "EFECTIVO $")).reduce((acc, v) => acc + parseFloat(v.totalUSD), 0);
+                if(subtotal > 0) {
+                    desgloseContenedor.innerHTML += `<p class="capitalize text-[9px]">${m.toLowerCase()}: <span class="text-white font-bold">${subtotal.toFixed(2)}$</span></p>`;
+                }
+            });
+        }
+
+        function abrirEdicion(i) {
+            const p = inventario[i];
+            document.getElementById('editIndex').value = i;
+            document.getElementById('editNombre').value = p.nombre;
+            document.getElementById('editCodigo').value = p.codigo;
+            document.getElementById('editColor').value = p.color;
+            document.getElementById('editStock').value = p.stock;
+            document.getElementById('editCosto').value = p.costo || 0;
+            document.getElementById('editPrecio').value = p.precio;
+            document.getElementById('editFotoPreview').src = p.foto || '';
+            document.getElementById('modalEdit').classList.add('modal-active');
+        }
+
+        async function guardarEdicion() {
+            const i = document.getElementById('editIndex').value;
+            const f = document.getElementById('editFotoInput').files[0];
+            inventario[i] = {
+                nombre: document.getElementById('editNombre').value.toUpperCase(),
+                codigo: document.getElementById('editCodigo').value.toUpperCase(),
+                color: document.getElementById('editColor').value.toUpperCase(),
+                stock: parseInt(document.getElementById('editStock').value),
+                costo: parseFloat(document.getElementById('editCosto').value) || 0,
+                precio: parseFloat(document.getElementById('editPrecio').value),
+                foto: f ? await redimensionarImagen(f) : inventario[i].foto
+            };
+            cerrarModal(); 
+            escribirNube();
+        }
+
+        function abrirEdicionVenta(i) {
+            const v = ventas[i];
+            document.getElementById('editVentaIndex').value = i;
+            document.getElementById('editVentaCliente').value = v.cliente;
+            document.getElementById('editVentaMonto').value = v.totalUSD;
+            document.getElementById('editVentaMetodo').value = v.metodo || "EFECTIVO $";
+            document.getElementById('modalEditVenta').classList.add('modal-active');
+        }
+
+        function guardarEdicionVenta() {
+            const i = document.getElementById('editVentaIndex').value;
+            ventas[i].cliente = document.getElementById('editVentaCliente').value.toUpperCase();
+            ventas[i].totalUSD = parseFloat(document.getElementById('editVentaMonto').value).toFixed(2);
+            ventas[i].metodo = document.getElementById('editVentaMetodo').value;
+            cerrarModalVenta(); 
+            escribirNube();
+        }
+
+        function eliminarVenta(i) { if(confirm("¿Borrar venta?")) { ventas.splice(i, 1); escribirNube(); } }
+        function eliminarPieza(i) { if(confirm("¿Eliminar del inventario?")) { inventario.splice(i, 1); escribirNube(); } }
+        function cerrarModal() { document.getElementById('modalEdit').classList.remove('modal-active'); }
+        function cerrarModalVenta() { document.getElementById('modalEditVenta').classList.remove('modal-active'); }
+        function cerrarModalRecibo() { document.getElementById('modalRecibo').classList.remove('modal-active'); }
+        function cambiarPestaña(id) { document.querySelectorAll('.pestaña').forEach(p => p.classList.add('hidden')); document.getElementById(id).classList.remove('hidden'); }
+        
+        function actualizarTasa() { 
+            tasa = parseFloat(document.getElementById('tasaDia').value); 
+            escribirNube();
+        }
+        
+        function limpiarCarritoTotal() { carrito = []; renderCarrito(); }
+    </script>
+</body>
+</html>
