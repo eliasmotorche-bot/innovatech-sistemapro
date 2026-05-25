@@ -115,7 +115,7 @@
                                 <option value="EFECTIVO $">EFECTIVO $</option>
                                 <option value="EFECTIVO BS">EFECTIVO BS</option>
                                 <option value="PAGO MOVIL">PAGO MÓVIL</option>
-                                <option value="ZELLE">ZELLE</option>
+                                <option value="PUNTO DE VENTA">PUNTO DE VENTA</option>
                                 <option value="TRANSFERENCIA">TRANSFERENCIA</option>
                             </select>
                         </div>
@@ -288,7 +288,7 @@
                         <option value="EFECTIVO $">EFECTIVO $</option>
                         <option value="EFECTIVO BS">EFECTIVO BS</option>
                         <option value="PAGO MOVIL">PAGO MÓVIL</option>
-                        <option value="ZELLE">ZELLE</option>
+                        <option value="PUNTO DE VENTA">PUNTO DE VENTA</option>
                         <option value="TRANSFERENCIA">TRANSFERENCIA</option>
                     </select>
                 </div>
@@ -836,7 +836,7 @@
             document.getElementById('cierreTotalUSD').innerText = totalHoy.toFixed(2) + " $";
             document.getElementById('cierreTotalBS').innerText = (totalHoy * tasa).toLocaleString('de-DE', {minimumFractionDigits: 2}) + " Bs";
             
-            const metodos = ["EFECTIVO $", "EFECTIVO BS", "PAGO MOVIL", "ZELLE", "TRANSFERENCIA"];
+            const metodos = ["EFECTIVO $", "EFECTIVO BS", "PAGO MOVIL", "PUNTO DE VENTA", "TRANSFERENCIA"];
             const desgloseContenedor = document.getElementById('cierreMetodosDesglose');
             desgloseContenedor.innerHTML = "";
             
